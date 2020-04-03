@@ -16,54 +16,226 @@ from time import sleep, time
 import pdb
 
 stm_ver=r'7.3'
-
 # root = r'rest/stm/'
 # suffix=r'configurations/running/users/?limit=0&with=last_traffic_time>'
-
 LOG_FILENAME=r'/var/log/test_bypass.log'
-
-stm_status=False
-link_type=r'copper'
-model_type=r'small'
-cores_per_interface=0 # small,
-interface_size=0
-segment_size=0
-segment_state=[]
-bump_status=False
-board = 'COSD304'
 logger = None
+# err_lists = ['Cannot connect to server', 'does not exist', 'no matching objects', 'waiting for server']
+# logging_temp = `{0:16}{1:8}{2:16}{3:16}{4:16}{5:16}{6:16}{7:16}{8:16}`
 
-err_lists = ['Cannot connect to server', 'does not exist', 'no matching objects', 'waiting for server']
+class Segment(object):
+    def __init__(self):
+        self.__name, self.__bypass_state, self.__segment_state = None, None, None
+        self.__ext_name, self.__ext_state, self.__ext_admin_status = None, None, None
+        self.__peer_name, self.__peer_state, self.__peer_admin_status = None, None, None
+        self.__slot = None
+        
+    def __str__(self):
+        return "(segment: {})".format(self.name)
+
+    def log_segment_state(self):
+        logger.info("{0:7}{1:13}{2:13}{3:15}{4:15}{5:13}{6:13}{7:15}{8:13}{9:13}".format(
+            self.slot, self.name, self.segment_state, 
+            self.ext_name, self.ext_state, self.ext_admin_status,
+            self.peer_name, self.peer_state, self.peer_admin_status,
+            self.bypass_state
+            ))
+
+    @property
+    def name(self):
+        return self.__name
+    
+    @name.setter
+    def name(self, val):
+        self.__name = "segment" + val
+
+    @property
+    def bypass_state(self):
+        return self.__bypass_state
+        
+    @bypass_state.setter
+    def bypass_state(self, val):
+        self.__bypass_state = val
+    
+    @property
+    def segment_state(self):
+        return self.__segment_state
+    
+    @segment_state.setter
+    def segment_state(self, val):
+        # print(val)
+        if val:
+            self.__segment_state = "True"
+        else:
+            self.__segment_state = "False"        
+
+    @property
+    def ext_name(self):
+        return self.__ext_name
+    
+    @ext_name.setter
+    def ext_name(self, val):
+        self.__ext_name = val
+
+    @property
+    def ext_state(self):
+        return self.__ext_state
+    
+    @ext_state.setter
+    def ext_state(self, val):
+        self.__ext_state = val
+
+    @property
+    def ext_admin_status(self):
+        return self.__ext_admin_status
+    
+    @ext_admin_status.setter
+    def ext_admin_status(self, val):
+        self.__ext_admin_status = val                
+
+    @property
+    def peer_name(self):
+        return self.__peer_name
+    
+    @peer_name.setter
+    def peer_name(self, val):
+        self.__peer_name = val
+    
+    @property
+    def peer_state(self):
+        return self.__peer_state
+    
+    @peer_state.setter
+    def peer_state(self, val):
+        self.__peer_state = val
+
+    @property
+    def peer_admin_status(self):
+        return self.__peer_admin_status
+    
+    @peer_admin_status.setter
+    def peer_admin_status(self, val):
+        self.__peer_admin_status = val
+
+    @property
+    def slot(self):
+        return self.__slot
+        
+    @slot.setter
+    def slot(self, val):
+        self.__slot = val        
+
+    # def add_bypass_state(self, bypass_state):
+    #     self.bypass_state = bypass_state
+
+    # def update_segment_state(self, segment_state):
+    #     self.segment_state = segment_state
+
+    # def get_segment_state(self):
+    #     return self.segment_state
+
+    # def get_attr(self, attr_name):
+    #     if "link_type" == attr_name:
+    #         return self.link_type
+    #     else:
+    #         return None
+
 
 class G(object):
+    __instance = None
+    _segment = list()
+        
+    stm_status=False
+
     userid=r'cli_admin'
     passwd=r'cli_admin'
     host=r'localhost'
     port=r'5000'
 
     rest_basic_path=r'configurations/running/'
-    rest_interface_path=r'interfaces/'
     rest_token=r'1'
     rest_order=r'>interface_id'
     rest_start=r'0'
     rest_limit=r'10'
     
+    link_type=r'copper'
+    model_type=r'small'
+    cores_per_interface=0 # small,
+    interface_size=0
+    segment_size=0
+    board = 'COSD304'
+
     fiber_seg_slot_number=[]
     is_same_slot_number=[]
+    segment_state=[]
 
-    segment1 = object()
-    segment2 = object()
-    segment3 = object()
-    segment4 = object()
-    # def __init__(self, rest_basic_path):
-    #     self.rest_url = '%s' % (rest_basic_path)
+    segment1 = Segment()
+    segment2 = Segment()
+    segment3 = Segment()
+    segment4 = Segment()
 
-    # def __str__(self):
-    #     print("rest_url : ".format(self.rest_url))
-    #     # pass
+    @classmethod
+    def __getInstance(cls):
+        return cls.__instance
 
-    # def get_rest_url(self):
-    #     return self.rest_url
+    @classmethod
+    def instance(cls, *args, **kargs):
+        cls.__instance = cls(*args, **kargs)
+        cls.instance = cls.__getInstance
+        return cls.__instance
+
+    @classmethod
+    def append_segment_data(cls, data):
+        cls._segment.append(data)
+
+
+class Resturl():
+    def __init__(self, saisei_class, select_attrs, with_attrs=[], with_vals=[]):
+        if len(with_attrs) >= 2:
+            self.select_attrs = ",".join(select_attrs)
+            with_patterns = []
+            for i, attr in enumerate(with_attrs):
+                for j, val in enumerate(with_vals):
+                    if i==j:
+                        with_pattern = "%s=%s" % (attr, val)
+                        with_patterns.append(with_pattern)
+            with_patterns = ",".join(with_patterns)
+            self.rest_url = '%s%s?token=%s&order=%s&start=%s&limit=%s&select=%s&with=%s' \
+            % ( G.rest_basic_path, 
+                saisei_class, 
+                G.rest_token, 
+                G.rest_order, 
+                G.rest_start, 
+                G.rest_limit, 
+                self.select_attrs, with_patterns)
+        elif len(with_attrs) == 1:
+            self.select_attrs = ",".join(select_attrs)
+            with_pattern = None
+            for i, attr in enumerate(with_attrs):
+                for j, val in enumerate(with_vals):
+                    if i==j:
+                        with_pattern = "%s=%s" % (attr, val)
+            self.rest_url = '%s%s?token=%s&order=%s&start=%s&limit=%s&select=%s&with=%s' \
+            % ( G.rest_basic_path, 
+                saisei_class, 
+                G.rest_token, 
+                G.rest_order, 
+                G.rest_start, 
+                G.rest_limit, 
+                self.select_attrs, with_pattern)
+        else:
+            self.select_attrs = select_attrs
+            self.rest_url = '%s%s%s' \
+            % ( G.rest_basic_path, 
+                saisei_class,  
+                self.select_attrs)
+
+    def __str__(self):
+        return "RestUrl: %s" % (self.rest_url)
+
+    def get_rest_url(self):
+        return self.rest_url
+
 
 def timer(func):
     def wrapper():
@@ -72,95 +244,6 @@ def timer(func):
         print("main() took {} seconds".format(time()- before))
         logger.info("main() took {} seconds".format(time()- before))
     return wrapper
-
-
-class Resturl(G):
-    def __init__(self, suffix, select_attrs, with_attr=[], with_val=[]):
-        if len(with_attr) >= 2:
-            self.select_attrs = ",".join(select_attrs)
-            self.rest_url = '%s%s?token=%s&order=%s&start=%s&limit=%s&select=%s&with=%s=%s,%s=%s' \
-            % ( G.rest_basic_path, 
-                suffix, 
-                G.rest_token, 
-                G.rest_order, 
-                G.rest_start, 
-                G.rest_limit, 
-                self.select_attrs, with_attr[0], with_val[0], with_attr[1], with_val[1])
-        elif len(with_attr) == 1:
-            self.select_attrs = ",".join(select_attrs)
-            self.rest_url = '%s%s?token=%s&order=%s&start=%s&limit=%s&select=%s&with=%s=%s' \
-            % ( G.rest_basic_path, 
-                suffix, 
-                G.rest_token, 
-                G.rest_order, 
-                G.rest_start, 
-                G.rest_limit, 
-                self.select_attrs, with_attr[0], with_val[0])
-        else:
-            self.select_attrs = select_attrs
-            self.rest_url = '%s%s%s' \
-            % ( G.rest_basic_path, 
-                suffix,  
-                self.select_attrs)
-        # super(Restinterfaceurl, self).__init__(rest_basic_path)
-
-    def __str__(self):
-        return "RestUrl: %s" % (self.rest_url)
-
-    def get_rest_url(self):
-        return self.rest_url
-
-    
-# class Segment():
-
-#     def __init__(self, interface):
-#         self.interface = interface
-
-    # def __str__(self):
-    #     return "(name: {}, state: {}, admin_status: {})".format(self.int_name, self.state, self.admin_status)
-
-    # def __repr__(self):
-    #     return "Segment({})".format(self.name)
-
-
-class Segment():
-
-    def __init__(self, segment_number, ext_name, peer_name, ext_state, peer_state, ext_admin_status, peer_admin_status):
-        self.name = "segment{}".format(segment_number)
-        self.ext_name = ext_name
-        self.peer_name = peer_name
-        self.ext_state = ext_state
-        self.peer_state = peer_state
-        self.ext_admin_status = ext_admin_status
-        self.peer_admin_status = peer_admin_status
-        self.bypass_state = ""
-
-    def __str__(self):
-        return "(segment: {})".format(self.name)
-
-    def log_state(self):
-        logger.info("{0:22}{1:12}{2:12}{3:12}{4:12}{5:12}{6:15}{7:13}".format(
-            self.name, 
-            self.ext_name,
-            self.ext_state, 
-            self.ext_admin_status,
-            self.peer_name, 
-            self.peer_state,
-            self.peer_admin_status,
-            self.bypass_state
-            ))
-
-    def add_bypass_state(self, bypass_state):
-        self.bypass_state = bypass_state
-
-
-class Parameter(object):
-
-    def __init__(self, cores_per_interface):
-        self.cores_per_interface = cores_per_interface
-
-    def get_parameter(self):
-        return {"cores_per_interface": self.cores_per_interface}
 
 
 # make_url = lambda suffix : 'http://%s:%d/%s%s' % (host, port, root, suffix)
@@ -176,6 +259,7 @@ def make_logger():
         logger.addHandler(fh)
     except Exception as e:
         print('cannot make logger, please check system, {}'.format(e))
+        sys.exit()
     else:
         logger.info("***** logger starting %s *****" % (sys.argv[0]))
 
@@ -189,7 +273,8 @@ except Exception as e:
 
 
 class Timeout(Exception):
-    '''subprocess 사용시 정상적인 반환을 안하는 경우 발생 '''
+    '''쉘에서 정상적인 반환을 안하는 경우 발생 '''
+
 
 def subprocess_open(command, timeout):
     try:
@@ -208,8 +293,8 @@ def subprocess_open(command, timeout):
                     p_open.kill()
                     raise Timeout
             except Timeout:
-                logger.error("timout for running subprocess()")
-                print("timout for running subprocess()")
+                logger.error("timout while running subprocess()")
+
 
 def logging_line():
     logger.info("="*70)
@@ -229,21 +314,37 @@ def get_fiber_slot():
                 G.fiber_seg_slot_number.append({
                     "fiber_seg1_slot_number": row.split(":")[1].strip()
                 })
+                if G.link_type == "fiber":
+                    G.segment1.slot = row.split(":")[1].strip()
+                else:
+                    G.segment1.slot = "None"
 
             if 'segment2' in row:
                 G.fiber_seg_slot_number.append({
                     "fiber_seg2_slot_number": row.split(":")[1].strip()
                 })
+                if G.link_type == "fiber":
+                    G.segment2.slot = row.split(":")[1].strip()
+                else:
+                    G.segment2.slot = "None"
 
             if 'segment3' in row:
                 G.fiber_seg_slot_number.append({
                     "fiber_seg3_slot_number": row.split(":")[1].strip()
                 })
+                if G.link_type == "fiber":
+                    G.segment3.slot = row.split(":")[1].strip()
+                else:
+                    G.segment3.slot = "None"
 
             if 'segment4' in row:
                 G.fiber_seg_slot_number.append({
                     "fiber_seg4_slot_number": row.split(":")[1].strip()
                 })
+                if G.link_type == "fiber":
+                    G.segment4.slot = row.split(":")[1].strip()
+                else:
+                    G.segment4.slot = "None"
 
     if (G.fiber_seg_slot_number[0]["fiber_seg1_slot_number"] == G.fiber_seg_slot_number[1]["fiber_seg2_slot_number"]):
         G.is_same_slot_number.append({"seg1_seg2": True})
@@ -256,83 +357,97 @@ def get_fiber_slot():
         G.is_same_slot_number.append({"seg3_seg4": False})        
 
 
-def get_link_type():
-    global link_type
+def set_link_type():
     cmd = r'/etc/stmfiles/files/scripts/dpdk_nic_bind.py -s |grep -B 15 "Network devices using kernel driver" |grep 0000'
-    nic_bind=subprocess_open(cmd, 10)
-    nic_bind = nic_bind[0].strip().split('\n')
+    nic_bind, _ = subprocess_open(cmd, 10)
+    try:
+        nic_bind = nic_bind.strip().split('\n')
+    except Exception as e:
+        logger.error(e)
+        pass
     nic_data=[]
     for nic in nic_bind:
         nic_data.append({
             "pci_address": re.findall(r"0000:[0-9A-Za-z][0-9A-Za-z]:00.[0-9]", nic)[0].replace("0000:", ""),
             "link_type": re.findall(r"\'[0-9A-Za-z ]*\'", nic)[0].replace(" ", "")
         })
-    
     for data in nic_data:
         if ('Fiber' or 'SFP') in data['link_type']:
-            link_type = r'fiber'
+            # G.segment1.update_attrs(link_type="fiber")
+            G.link_type = r'fiber'
         else:
-            link_type = r'copper'
-            # link_type = r'fiber'
-
-# def get_rest_url(_select_attrs, _with_attr=[], _with_arg=[]):
-#     # print(_with_arg)
-#     if len(_with_attr) < 1:
-#         return "{}{}{}".format(rest_basic_path, rest_interface_path, _select_attrs)
-
-#     if len(_with_attr) > 1:
-#         return "{}{}?token={}&order={}&start={}&limit={}&select={}&with={}={},{}={}".format(
-#             rest_basic_path, rest_interface_path, rest_token, rest_order, rest_start, rest_limit, _select_attrs, _with_attr[0], _with_arg[0], _with_attr[1], _with_arg[1])
-#     else:
-#         return "{}{}?token={}&order={}&start={}&limit={}&select={}&with={}={}".format(
-#             rest_basic_path, rest_interface_path, rest_token, rest_order, rest_start, rest_limit, _select_attrs, _with_attr[0], _with_arg[0])
+            # G.segment1.update_attrs(link_type="copper")
+            G.link_type = r'copper'
 
 
-# def get_cores_per_interface():
-#     return int(api.rest.get("{}parameters?level=full&format=human&link=expand&time=utc".format(G.rest_basic_path))['collection'][0]['cores_per_interface'])
+def get_interface_info(saisei_class, select_attrs, with_attrs, with_vals):
+    rest_url = Resturl(
+                saisei_class,
+                select_attrs,
+                with_attrs,
+                with_vals
+            )
+    response = api.rest.get(rest_url.get_rest_url())
+    return response
 
 
-def set_segment_state(segment_number, peer_status, enabled_size, int_thread_state, interface, peer_int):
-    global segment_state
+def get_peer_interface_info(peer_name):
+    rest_url = Resturl("interfaces/", "{}?level=detail&format=human&link=expand&time=utc".format(peer_name))
+    peer_int = api.rest.get(rest_url.get_rest_url())['collection'][0]
+    return peer_int
+
+
+
+def set_segment_state(segment_number, peer_status, enabled_size, int_thread_state, interface, peer_int, segment):
     name = interface["name"]
     actual_direction = interface["actual_direction"]
     peer_name = interface["peer"]["link"]["name"]
     admin_status = interface["admin_status"]
-    # pdb.set_trace()
     if peer_status == "up":
         enabled_size += 1
-        if (int_thread_state[0].strip() == interface["name"]):
-            if cores_per_interface >= 1:
-            # if model_type is not "small":
-                int_peer_thread_state = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(peer_int["name"], "{print $15}"), 10)
-                if int_peer_thread_state[0].strip() == peer_int["name"]:
-                    name = "{}:up-{}:up".format(interface["name"], interface["peer"]["link"]["name"])                    
-                    segment_state.append({
-                        "state": True,
-                        "bump": name,
-                    })
+        if (int_thread_state.strip() == interface["name"]):
+            if G.cores_per_interface >= 1:
+                int_peer_thread_state, _ = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(peer_int["name"], "{print $15}"), 10)
+                if int_peer_thread_state.strip() == peer_int["name"]:
+                    # segment.update_segment_state(True)
+                    segment.segment_state = True
+                    G.segment_state.append(segment)
                     return enabled_size
                 else:
-                    name = "{}:up-{}:down".format(interface["name"], interface["peer"]["link"]["name"])                    
-                    segment_state.append({
-                        "state": False,
-                        "bump": name,
-                    })
+                    # segment.update_segment_state(False)
+                    segment.segment_state = False
+                    G.segment_state.append(segment)
+                    
                     return enabled_size
             else:
-                name = "{}:up-{}:up".format(interface["name"], interface["peer"]["link"]["name"])
-                segment_state.append({
-                    "state": True,
-                    "bump": name,
-                })
+                # segment.update_segment_state(True)
+                segment.segment_state = True
+                G.segment_state.append(segment)
                 return enabled_size
     else:
-        name = "{}:up-{}:down".format(interface["name"], interface["peer"]["link"]["name"])
-        segment_state.append({
-            "state": False,
-            "bump": name,
-        })
+        # segment.update_segment_state(False)
+        segment.segment_state = False
+        G.segment_state.append(segment)
         return enabled_size
+
+
+def set_parameter_info(attr="cores_per_interface"):
+    parameter_url = Resturl(
+    "parameters?",
+    "level=full&format=human&link=expand&time=utc")
+    G.cores_per_interface = api.rest.get(parameter_url.get_rest_url())['collection'][0][attr] 
+
+
+def set_segment_obj(seg_num, interface, peer_int):
+    for i, seg in enumerate([G.segment1, G.segment2, G.segment3, G.segment4], 1):
+        if seg_num == i:
+            seg.name = str(seg_num)
+            seg.ext_name = interface["name"]
+            seg.ext_admin_status = interface["admin_status"]
+            seg.ext_state = interface["state"]
+            seg.peer_name = peer_int["name"]
+            seg.peer_admin_status = peer_int["admin_status"]
+            seg.peer_state = peer_int["state"]
 
 
 def check_segment_state():
@@ -344,139 +459,77 @@ def check_segment_state():
         4. model_type
         5. interface thread status
     '''
-    global segment_state, stm_status, bump_status
-    global cores_per_interface
-    segment_state=[]    # init
-    rest_url = Resturl(
-            "interfaces/",
-            ["name",
-            "actual_direction",
-            "state",
-            "admin_status",
-            "pci_address",
-            "interface_id",
-            "type",
-            "peer"],
-            ["type","actual_direction"],
-            ["ethernet","external"])
-    
-    external_interfaces = api.rest.get(rest_url.get_rest_url())
-    parameter_url = Resturl(
-        "parameters?",
-        "level=full&format=human&link=expand&time=utc")
-    cores_per_interface = api.rest.get(parameter_url.get_rest_url())['collection'][0]["cores_per_interface"]
+    G.segment_state=[]    # init
+    saisei_class = "interfaces/"
+    select_attrs = ["name", "actual_direction", "state", "admin_status", "pci_address", "interface_id", "type", "peer"]
+    with_attrs = ["type", "actual_direction"]
+    with_vals = ["ethernet", "external"]
+
+    external_interfaces = get_interface_info(saisei_class, select_attrs, with_attrs, with_vals)
+    set_parameter_info(attr="cores_per_interface")
     enabled_size = 0    
     for i, interface in enumerate(external_interfaces["collection"], 1):
         # in case, segment 1
         if (i==1 and interface["state"] == "enabled" and interface["admin_status"] == "up"):
             enabled_size += 1
-            int_thread_state = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
-            rest_url = Resturl(
-                "interfaces/",
-                "{}?level=detail&format=human&link=expand&time=utc".format(interface["peer"]["link"]["name"]))
-            peer_int = api.rest.get(rest_url.get_rest_url())['collection'][0]
+            int_thread_state, _ = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
+            peer_int = get_peer_interface_info(interface["peer"]["link"]["name"])
             peer_status = peer_int['admin_status']
-            G.segment1 = Segment(
-                i, 
-                interface["name"], 
-                peer_int["name"], 
-                interface["state"], 
-                peer_int["state"], 
-                interface["admin_status"], 
-                peer_int["admin_status"])
-            # print(G.segment1)  
-            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int)
+            set_segment_obj(i, interface, peer_int)
+            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int, G.segment1)
         # in case, segment 2
         elif (i==2 and interface["state"] == "enabled" and interface["admin_status"] == "up"):
             enabled_size += 1
-            int_thread_state = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
-            rest_url = Resturl(
-                "interfaces/",
-                "{}?level=detail&format=human&link=expand&time=utc".format(interface["peer"]["link"]["name"]))
-            peer_int = api.rest.get(rest_url.get_rest_url())['collection'][0]
+            int_thread_state, _ = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
+            peer_int = get_peer_interface_info(interface["peer"]["link"]["name"])
             peer_status = peer_int['admin_status']
-            G.segment2 = Segment(
-                i, 
-                interface["name"], 
-                peer_int["name"], 
-                interface["state"], 
-                peer_int["state"], 
-                interface["admin_status"], 
-                peer_int["admin_status"])
-            # print(G.segment2)
-            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int)
+            set_segment_obj(i, interface, peer_int)
+            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int, G.segment2)
         # in case, segment 3
         elif (i==3 and interface["state"] == "enabled" and interface["admin_status"] == "up"):
             enabled_size += 1
-            int_thread_state = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
-            rest_url = Resturl(
-                "interfaces/",
-                "{}?level=detail&format=human&link=expand&time=utc".format(interface["peer"]["link"]["name"]))
-            peer_int = api.rest.get(rest_url.get_rest_url())['collection'][0]
+            int_thread_state, _ = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
+            peer_int = get_peer_interface_info(interface["peer"]["link"]["name"])
             peer_status = peer_int['admin_status']
-            G.segment3 = Segment(
-                i, 
-                interface["name"], 
-                peer_int["name"], 
-                interface["state"], 
-                peer_int["state"], 
-                interface["admin_status"], 
-                peer_int["admin_status"])
-            # print(G.segment3)
-            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int)            
+            set_segment_obj(i, interface, peer_int)
+            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int, G.segment3)            
         # in case, segment 4
         elif (i==4 and interface["state"] == "enabled" and interface["admin_status"] == "up"):
             enabled_size += 1
-            int_thread_state = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
-            rest_url = Resturl(
-                "interfaces/",
-                "{}?level=detail&format=human&link=expand&time=utc".format(interface["peer"]["link"]["name"]))
-            peer_int = api.rest.get(rest_url.get_rest_url())['collection'][0]
+            int_thread_state, _ = subprocess_open(r"ps -elL |grep {} |awk '{}'".format(interface["name"], "{print $15}"), 10)
+            peer_int = get_peer_interface_info(interface["peer"]["link"]["name"])
             peer_status = peer_int['admin_status']
-            G.segment4 = Segment(
-                i, 
-                interface["name"], 
-                peer_int["name"], 
-                interface["state"], 
-                peer_int["state"], 
-                interface["admin_status"], 
-                peer_int["admin_status"])
-            # print(G.segment4)
-            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int)        
+            set_segment_obj(i, interface, peer_int)
+            enabled_size = set_segment_state(i, peer_status, enabled_size, int_thread_state, interface, peer_int, G.segment4)        
         else:
             enabled_size += 0
             logger.error("There is no Segment.")
-    if interface_size == enabled_size:
-        stm_status = True
-        bump_status = True
+    if G.interface_size == enabled_size:
+        G.stm_status = True
     else:
-        stm_status = False
-        bump_status = False
+        G.stm_status = False
 
 def do_copper_bypass(seg_number, action="disable"):
     bypass_state, _ = subprocess_open('cat /sys/class/bypass/g3bp{}/bypass'.format(seg_number), 10)
     try:
-        # pdb.set_trace()
         if seg_number == 0:
-            G.segment1.add_bypass_state(bypass_state.strip('\n'))
+            G.segment1.bypass_state = bypass_state.strip('\n')
         if seg_number == 1:
-            G.segment2.add_bypass_state(bypass_state.strip('\n'))
+            G.segment2.bypass_state = bypass_state.strip('\n')
         if seg_number == 2:
-            G.segment3.add_bypass_state(bypass_state.strip('\n'))
+            G.segment3.bypass_state = bypass_state.strip('\n')
         if seg_number == 3:
-            G.segment4.add_bypass_state(bypass_state.strip('\n'))
+            G.segment4.bypass_state = bypass_state.strip('\n')
 
         if bypass_state.strip('\n') is not "n" and action == "disable":
         # if True:
             subprocess_open("echo 1 > /sys/class/bypass/g3bp{}/func".format(seg_number), 10)
             subprocess_open("echo n > /sys/class/bypass/g3bp{}/bypass".format(seg_number), 10)
-            # logger.info("disable seg1 copper bypass!")
             logger.info("disable seg{} copper bypass!".format(int(seg_number)+1))
 
         elif bypass_state.strip('\n') is not "b" and action == "enable":
             subprocess_open("echo 1 > /sys/class/bypass/g3bp{}/func".format(seg_number), 10)
             subprocess_open("echo n > /sys/class/bypass/g3bp{}/bypass".format(seg_number), 10)
-            # logger.info("disable seg1 copper bypass!")
             logger.info("enable seg{} copper bypass!".format(int(seg_number)+1))
         else:
             pass
@@ -491,22 +544,20 @@ def do_fiber_bypass(seg_number, action="disable"):
         bypass_state, _ = subprocess_open("cat /sys/class/misc/caswell_bpgen2/{}/bypass0".format(G.fiber_seg_slot_number), 10)
         try:
             if seg_number == 0:
-                G.segment1.add_bypass_state(bypass_state.strip('\n'))
+                G.segment1.bypass_state = bypass_state.strip('\n')
             if seg_number == 1:
-                G.segment2.add_bypass_state(bypass_state.strip('\n'))
+                G.segment2.bypass_state = bypass_state.strip('\n')
             if seg_number == 2:
-                G.segment3.add_bypass_state(bypass_state.strip('\n'))
+                G.segment3.bypass_state = bypass_state.strip('\n')
             if seg_number == 3:
-                G.segment4.add_bypass_state(bypass_state.strip('\n'))
+                G.segment4.bypass_state = bypass_state.strip('\n')
             # if True:
             if bypass_state.strip() is not "0" and action == "disable":
                 subprocess_open("echo 0 > /sys/class/misc/caswell_bpgen2/{}/bypass0".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
             elif bypass_state.strip() is not "2" and action == "enable":
                 subprocess_open("echo 2 > /sys/class/misc/caswell_bpgen2/{}/bypass0".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
             else:
                 pass
         except Exception as e:
@@ -519,11 +570,9 @@ def do_fiber_bypass(seg_number, action="disable"):
             if bypass_state.strip() is not "0" and action == "disable":
                 subprocess_open("echo 0 > /sys/class/misc/caswell_bpgen2/{}/bypass1".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass1 in {}!".format(int(seg_number)+2, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass1 in {}!".format(int(seg_number)+2, G.fiber_seg_slot_number))
             elif bypass_state.strip() is not "2" and action == "enable":
                 subprocess_open("echo 2 > /sys/class/misc/caswell_bpgen2/{}/bypass1".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass1 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass1 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
             else:
                 pass                   
         except Exception as e:
@@ -545,11 +594,9 @@ def do_fiber_bypass(seg_number, action="disable"):
             if bypass_state.strip() is not "0":
                 subprocess_open("echo 0 > /sys/class/misc/caswell_bpgen2/{}/bypass0".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
             elif bypass_state.strip() is not "2" and action == "enable":
                 subprocess_open("echo 2 > /sys/class/misc/caswell_bpgen2/{}/bypass0".format(G.fiber_seg_slot_number), 10)
                 logger.info("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
-                # print("disable seg{} fiber bypass0 in {}!".format(int(seg_number)+1, G.fiber_seg_slot_number))
             else:
                 pass                
         except Exception as e:
@@ -557,10 +604,9 @@ def do_fiber_bypass(seg_number, action="disable"):
             pass
 
 
-# def disable_bypass(seg_number, fiber_seg_slot_number, is_same_slot_number):
 def bypass_action(seg_number, action):
-    global link_type
-    if link_type == "copper":
+
+    if G.link_type == "copper":
         lsmod, _ = subprocess_open("/sbin/lsmod | grep \"caswell_bpgen3\"", 10)
         if lsmod is "":
                 subprocess_open("insmod /opt/stm/bypass_drivers/portwell_kr/src/driver/caswell_bpgen3.ko", 10)
@@ -575,15 +621,14 @@ def bypass_action(seg_number, action):
         if i2c_module is "":
             subprocess_open("modprobe i2c-i801", 10)
         if fiber_module is "":
-            subprocess_open("insmod /opt/stm/bypass_drivers/portwell_fiber/driver/network-bypass.ko board={}".format(board), 10)  
+            subprocess_open("insmod /opt/stm/bypass_drivers/portwell_fiber/driver/network-bypass.ko board={}".format(G.board), 10)  
 
         do_fiber_bypass(seg_number)
 
 
 
 def bypass(action="disable"):
-    global segment_state
-    for i, seg_state in enumerate(segment_state):
+    for i, segment in enumerate(G.segment_state):
         # TODO: 1번과 2번 세그먼트의 슬롯 넘버가 같을 경우 처리로직 추가 필요
         # TODO: 1번과 2번 세그먼트의 슬롯 넘버가 다를 경우 처리로직 추가 필요
         # 최대 4개의 세그먼트가 구성된다고 가정시, 
@@ -591,80 +636,63 @@ def bypass(action="disable"):
         # 2. 2개의 슬롯 - 각 슬롯별 2개의 세그먼트
         # 1번 세그먼트
         # 반드시 segment 항목이 존재해야함.
-        if (i==0 and seg_state["state"]):
+        if (i==0 and segment.segment_state):
             bypass_action(i, action)
         # 2번 세그먼트
-        if (i==1 and seg_state["state"]):
-            # if G.is_same_slot_number[0]["seg1_seg2"] == False:
+        if (i==1 and segment.segment_state):
             bypass_action(i, action)
         # 3번 세그먼트
-        if (i==2 and seg_state["state"]):
+        if (i==2 and segment.segment_state):
             bypass_action(i, action)
         # 4번 세그먼트
-        if (i==3 and seg_state["state"]):
-            # if G.is_same_slot_number[1]["seg3_seg4"] == False:
+        if (i==3 and segment.segment_state):
             bypass_action(i, action)
 
 
 def logging_state():
-    logger.info("{0:22}{1:12}{2:12}{3:12}{4:12}{5:12}{6:15}{7:13}".format(
-    "segment_name", "ext", "ext_state", "ext_admin", "peer", "peer_state", "peer_admin", "bypass_state"
+    logger.info("{0:7}{1:13}{2:13}{3:15}{4:15}{5:13}{6:13}{7:15}{8:13}{9:13}".format(
+    "[slot]", "[seg_name]", "[seg_state]", "[ext_int_name]", "[ext_state]", "[ext_admin]", "[peer]", "[peer_state]", "[peer_admin]", "[bypass_state]"
     ))
-    G.segment1.log_state()
-    G.segment2.log_state()
-    logger.info("link_type: {}, model_type: {}, cores_per_interface: {}".format(
-        link_type, 
-        model_type, 
-        cores_per_interface))
+    G.segment1.log_segment_state()
+    G.segment2.log_segment_state()
+    logger.info("{0:16}{1:16}{2:16}".format("[link_type]", "[model_type]", "[cores_per_interface]"))
+    logger.info("{0:16}{1:16}{2:16}".format(G.link_type, G.model_type, G.cores_per_interface))
     logging_line()
+
 
 
 # @timer
 def main():
-    global stm_status, link_type, interface_size, segment_size, board
-    # check if stm is alive, 
-    while not stm_status:    
-        rest_url = Resturl(
-            "interfaces/",
-            ["name",
-            "actual_direction",
-            "state",
-            "admin_status",
-            "pci_address",
-            "interface_id",
-            "type",
-            "peer"],
-            ["type"],
-            ["ethernet"]
-        )
-        # print(rest_url)
-        # url = Resturl("interfaces/")
-        response = api.rest.get(rest_url.get_rest_url())
+    saisei_class = "interfaces/"
+    select_attrs = ["name", "actual_direction", "state", "admin_status", "pci_address", "interface_id", "type", "peer"]
+    with_attrs = ["type"]
+    with_vals = ["ethernet"]
+    while not G.stm_status:
+        response = get_interface_info(saisei_class, select_attrs, with_attrs, with_vals)
         if response['size'] > 1:
-            stm_status=True
-
+            G.stm_status = True
+        else:
+            G.stm_status = False      
+  
     while True:
-        response = api.rest.get(rest_url.get_rest_url())
+        response = get_interface_info(saisei_class, select_attrs, with_attrs, with_vals)
         try:
-            interface_size = response['size']
-            interface_size = int(interface_size)
-            segment_size = int(interface_size)/2
+            G.interface_size = response['size']
+            G.interface_size = int(G.interface_size)
+            G.segment_size = int(G.interface_size)/2
         except Exception as e:
             logger.info(e)
-            segment_size = 0
+            G.segment_size = 0
             pass
 
         get_fiber_slot()
-        get_link_type()
+        set_link_type()
     
-        if not stm_status:
+        if not G.stm_status:
             # TODO: check bump and stm status[*]
             # TODO: add enable-bypass[*]
             check_segment_state()
             bypass("enable")
-            # logger.info("{0:22}{1:12}{2:12}{3:12}{4:12}{5:12}{6:15}{7:13}".format(
-            # "segment_name", "ext", "ext_state", "ext_admin", "peer", "peer_state", "peer_admin", "bypass_state"
-            # ))
             logging_state()
         else:
             # TODO: check bump and if is down enable bypass, else disable bypass[*]
@@ -672,11 +700,7 @@ def main():
             # TODO: check_segment_state 함수 class를 이용해서 개선하기[?]
             check_segment_state()
             bypass("disable")
-            # G.segment1.add_bypass_state("n")
-            # G.segment2.add_bypass_state("n")
-            # logger.info("{0:22}{1:12}{2:12}{3:12}{4:12}{5:12}{6:15}{7:13}".format(
-            # "segment_name", "ext", "ext_state", "ext_admin", "peer", "peer_state", "peer_admin", "bypass_state"
-            # ))
+            # pdb.set_trace()
             logging_state()
         # sleep(2)
 
@@ -688,9 +712,3 @@ if __name__ == "__main__":
         print("\r\nThe script is terminated by user interrupt!")
         print("Bye!!")
         sys.exit()
-    # except Exception as e:
-    #     _, _ , tb = sys.exc_info()    # tb  ->  traceback
-    #     print("{} : {}".format(e.message, tb.tb_lineno))
-    #     logger.error("main() cannot be running by some error, {}".format(e))
-    #     # sys.exit()
-    #     pass
